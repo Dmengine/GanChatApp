@@ -1,0 +1,246 @@
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+
+interface User {
+  _id: string;
+  email: string;
+  name: string;
+}
+
+interface Chat {
+  _id: string;
+  name: string;
+  members: User[];
+  isGroup: boolean;
+}
+
+interface Message {
+  _id: string;
+  sender: User;
+  content: string;
+  chat: string;
+  createdAt: string;
+}
+
+const ChatPage: React.FC = () => {
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [newChatEmail, setNewChatEmail] = useState('');
+  const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      const parsed = JSON.parse(userData);
+      setUser(parsed);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user?._id) fetchChats();
+  }, [user]);
+
+  const fetchChats = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`http://localhost:5001/api/chat/${user?._id}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      setChats(res.data);
+    } catch (err) {
+      console.error('Failed to fetch chats', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+ const createChat = async () => {
+  if (!newChatEmail.trim() || !user) return;
+
+  try {
+    setLoading(true);
+
+    // Step 1: Fetch other user by email
+    const userRes = await axios.get(`http://localhost:5001/api/chat/user/${newChatEmail}`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
+
+    const otherUser = userRes.data;
+
+    // Step 2: Use both user._id and otherUser._id to create chat
+    const res = await axios.post(
+      'http://localhost:5001/api/chat',
+      {
+        name: '',
+        members: [user._id, otherUser._id],
+        isGroup: false,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+      }
+    );
+
+    if (res.data?._id) {
+      setChats((prev) => [...prev, res.data]);
+      setNewChatEmail('');
+    }
+  } catch (error: any) {
+    console.error(error);
+    alert(
+      error.response?.data?.message || 'Failed to create chat. User may not exist or server error.'
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  const fetchMessages = async (chatId: string) => {
+    try {
+      const res = await axios.get(`http://localhost:5001/api/message/${chatId}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      setMessages(res.data);
+    } catch (err) {
+      console.error('Failed to fetch messages', err);
+    }
+  };
+
+  const handleSelectChat = (chat: Chat) => {
+    setSelectedChat(chat);
+    fetchMessages(chat._id);
+  };
+
+  const sendMessage = async () => {
+  if (!newMessage.trim() || !selectedChat || !user) return;
+
+  try {
+    const res = await axios.post(
+      `http://localhost:5001/api/message/${selectedChat._id}`,
+      {
+        sender: user._id,     
+        content: newMessage,
+        chat: selectedChat._id,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+      }
+    );
+
+    setMessages((prev) => [...prev, res.data]);
+    setNewMessage('');
+  } catch (err) {
+    console.error('Failed to send message', err);
+  }
+};
+
+  return (
+    <div className="flex min-h-screen bg-gray-100">
+      {/* Left Panel - Chats */}
+      <div className="w-full md:w-1/3 border-r bg-white">
+        <div className="p-4">
+          <h2 className="text-xl font-semibold text-center mb-4">Chats</h2>
+
+          <div className="flex mb-4">
+            <input
+              type="email"
+              placeholder="Enter email"
+              value={newChatEmail}
+              onChange={(e) => setNewChatEmail(e.target.value)}
+              className="p-2 border rounded-l w-full"
+            />
+            <button
+              onClick={createChat}
+              className="bg-blue-600 text-white px-4 rounded-r"
+              disabled={loading}
+            >
+              {loading ? '...' : 'Create'}
+            </button>
+          </div>
+
+          <ul>
+            {chats.map((chat) => (
+              <li
+                key={chat._id}
+                className={`p-3 border-b hover:bg-gray-100 cursor-pointer ${
+                  selectedChat?._id === chat._id ? 'bg-gray-200' : ''
+                }`}
+                onClick={() => handleSelectChat(chat)}
+              >
+                {chat.isGroup
+                  ? chat.name
+                  : chat.members.find((m) => m._id !== user?._id)?.email}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Right Panel - Messages */}
+      <div className="flex-1 p-4">
+        {selectedChat ? (
+          <>
+            <h3 className="text-lg font-bold mb-4">
+              {selectedChat.isGroup
+                ? selectedChat.name
+                : selectedChat.members.find((m) => m._id !== user?._id)?.email}
+            </h3>
+
+            <div className="h-[70vh] overflow-y-auto border p-4 rounded bg-white space-y-2">
+              {messages.map((msg) => (
+                <div
+                  key={msg._id}
+                  className={`p-2 rounded-md max-w-xs ${
+                    msg.sender._id === user?._id
+                      ? 'ml-auto bg-blue-100 text-right'
+                      : 'mr-auto bg-gray-200'
+                  }`}
+                >
+                  <p className="text-sm">{msg.content}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Date(msg.createdAt).toLocaleTimeString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex">
+              <input
+                type="text"
+                placeholder="Type a message..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                className="p-3 border rounded-l w-full"
+              />
+              <button
+                onClick={sendMessage}
+                className="bg-green-600 text-white px-4 rounded-r"
+              >
+                Send
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            Select a chat to start messaging.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ChatPage;
