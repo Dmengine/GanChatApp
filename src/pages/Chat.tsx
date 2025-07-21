@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import io from 'socket.io-client';
+
+const socket = io('http://localhost:5001');
 
 interface User {
   _id: string;
@@ -30,6 +33,11 @@ const ChatPage: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [groupName, setGroupName] = useState('');
+  const [groupMembers, setGroupMembers] = useState('');
+  const [addMembersInput, setAddMembersInput] = useState('');
+  const [showAddMembers, setShowAddMembers] = useState(false);
+
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -43,13 +51,28 @@ const ChatPage: React.FC = () => {
     if (user?._id) fetchChats();
   }, [user]);
 
+  useEffect(() => {
+    if (!selectedChat) return;
+
+    socket.emit('joinChat', selectedChat._id);
+
+    const receiveMessage = (msg: Message) => {
+      if (msg.chat === selectedChat._id) {
+        setMessages((prev) => [...prev, msg]);
+      }
+    };
+
+    socket.on('receiveMessage', receiveMessage);
+    return () => {
+      socket.off('receiveMessage', receiveMessage);
+    };
+  }, [selectedChat]);
+
   const fetchChats = async () => {
     try {
       setLoading(true);
       const res = await axios.get(`http://localhost:5001/api/chat/${user?._id}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setChats(res.data);
     } catch (err) {
@@ -59,57 +82,80 @@ const ChatPage: React.FC = () => {
     }
   };
 
- const createChat = async () => {
-  if (!newChatEmail.trim() || !user) return;
+  const createChat = async () => {
+    if (!newChatEmail.trim() || !user) return;
 
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
+      const userRes = await axios.get(`http://localhost:5001/api/chat/user/${newChatEmail}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
 
-    // Step 1: Fetch other user by email
-    const userRes = await axios.get(`http://localhost:5001/api/chat/user/${newChatEmail}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-    });
+      const otherUser = userRes.data;
 
-    const otherUser = userRes.data;
-
-    // Step 2: Use both user._id and otherUser._id to create chat
-    const res = await axios.post(
-      'http://localhost:5001/api/chat',
-      {
-        name: '',
-        members: [user._id, otherUser._id],
-        isGroup: false,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+      const res = await axios.post(
+        'http://localhost:5001/api/chat',
+        {
+          name: '',
+          members: [user._id, otherUser._id],
+          isGroup: false,
         },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        }
+      );
+
+      if (res.data?._id) {
+        setChats((prev) => [...prev, res.data]);
+        setNewChatEmail('');
       }
-    );
-
-    if (res.data?._id) {
-      setChats((prev) => [...prev, res.data]);
-      setNewChatEmail('');
+    } catch (error: any) {
+      console.error(error);
+      alert(error.response?.data?.message || 'Failed to create chat');
+    } finally {
+      setLoading(false);
     }
-  } catch (error: any) {
-    console.error(error);
-    alert(
-      error.response?.data?.message || 'Failed to create chat. User may not exist or server error.'
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
+  const createGroupChat = async () => {
+    if (!groupName.trim() || !groupMembers.trim()) return;
+    try {
+      const emails = groupMembers.split(',').map((e) => e.trim());
+      const memberRes = await Promise.all(
+        emails.map((email) =>
+          axios.get(`http://localhost:5001/api/chat/user/${email}`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          })
+        )
+      );
+
+      const members = memberRes.map((res) => res.data._id);
+      members.push(user!._id); // include current user
+
+      const res = await axios.post(
+        'http://localhost:5001/api/chat',
+        {
+          name: groupName,
+          members,
+          isGroup: true,
+        },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        }
+      );
+
+      setChats((prev) => [...prev, res.data]);
+      setGroupName('');
+      setGroupMembers('');
+    } catch (err) {
+      console.error('Failed to create group chat', err);
+    }
+  };
 
   const fetchMessages = async (chatId: string) => {
     try {
       const res = await axios.get(`http://localhost:5001/api/message/${chatId}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setMessages(res.data);
     } catch (err) {
@@ -123,33 +169,70 @@ const ChatPage: React.FC = () => {
   };
 
   const sendMessage = async () => {
-  if (!newMessage.trim() || !selectedChat || !user) return;
+    if (!newMessage.trim() || !selectedChat || !user) return;
+
+    try {
+      const res = await axios.post(
+        `http://localhost:5001/api/message/${selectedChat._id}`,
+        {
+          sender: user._id,
+          content: newMessage,
+          chat: selectedChat._id,
+        },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        }
+      );
+
+      setMessages((prev) => [...prev, res.data]);
+      socket.emit('sendMessage', {
+        chatId: selectedChat._id,
+        message: res.data,
+      });
+
+      setNewMessage('');
+    } catch (err) {
+      console.error('Failed to send message', err);
+    }
+  };
+
+  const addMembersToGroup = async () => {
+  if (!selectedChat || !addMembersInput.trim()) return;
 
   try {
-    const res = await axios.post(
-      `http://localhost:5001/api/message/${selectedChat._id}`,
+    const emails = addMembersInput.split(',').map((e) => e.trim());
+    const memberRes = await Promise.all(
+      emails.map((email) =>
+        axios.get(`http://localhost:5001/api/chat/user/${email}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        })
+      )
+    );
+
+    const newMembers = memberRes.map((res) => res.data._id);
+
+    const res = await axios.put(
+      `http://localhost:5001/api/chat/${selectedChat._id}/add-members`,
+      { newMembers },
       {
-        sender: user._id,     
-        content: newMessage,
-        chat: selectedChat._id,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       }
     );
 
-    setMessages((prev) => [...prev, res.data]);
-    setNewMessage('');
-  } catch (err) {
-    console.error('Failed to send message', err);
+    // Update selected chat with new members
+    setSelectedChat(res.data);
+    setAddMembersInput('');
+    setShowAddMembers(false);
+  } catch (error: any) {
+    console.error('Failed to add members:', error);
+    alert(error.response?.data?.message || 'Error adding members');
   }
 };
 
+
   return (
     <div className="flex min-h-screen bg-gray-100">
-      {/* Left Panel - Chats */}
+      {/* Left Panel */}
       <div className="w-full md:w-1/3 border-r bg-white">
         <div className="p-4">
           <h2 className="text-xl font-semibold text-center mb-4">Chats</h2>
@@ -171,6 +254,29 @@ const ChatPage: React.FC = () => {
             </button>
           </div>
 
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="Group Name"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              className="p-2 border rounded mb-2 w-full"
+            />
+            <input
+              type="text"
+              placeholder="Member emails (comma separated)"
+              value={groupMembers}
+              onChange={(e) => setGroupMembers(e.target.value)}
+              className="p-2 border rounded mb-2 w-full"
+            />
+            <button
+              onClick={createGroupChat}
+              className="bg-purple-600 text-white px-4 py-2 w-full rounded"
+            >
+              Add Group
+            </button>
+          </div>
+
           <ul>
             {chats.map((chat) => (
               <li
@@ -189,7 +295,7 @@ const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Right Panel - Messages */}
+      {/* Right Panel */}
       <div className="flex-1 p-4">
         {selectedChat ? (
           <>
@@ -198,7 +304,34 @@ const ChatPage: React.FC = () => {
                 ? selectedChat.name
                 : selectedChat.members.find((m) => m._id !== user?._id)?.email}
             </h3>
-
+            {selectedChat.isGroup && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setShowAddMembers((prev) => !prev)}
+                  className="text-sm text-blue-600 underline"
+                >
+                  + Add Members
+                </button>
+                
+                {showAddMembers && (
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      placeholder="Emails (comma separated)"
+                      value={addMembersInput}
+                      onChange={(e) => setAddMembersInput(e.target.value)}
+                      className="p-2 border rounded w-full mb-2"
+                    />
+                    <button
+                      onClick={addMembersToGroup}
+                      className="bg-blue-500 text-white px-4 py-2 rounded text-sm"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="h-[70vh] overflow-y-auto border p-4 rounded bg-white space-y-2">
               {messages.map((msg) => (
                 <div
