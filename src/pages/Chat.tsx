@@ -88,14 +88,14 @@ const ChatPage: React.FC = () => {
 
     try {
       setLoading(true);
-      const userRes = await axios.get(`http://localhost:5001/api/chat/user/${newChatEmail}`, {
+      const userRes = await axios.get(`${SERVER_URL}/api/chat/user/${newChatEmail}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
 
       const otherUser = userRes.data;
 
       const res = await axios.post(
-        'http://localhost:5001/api/chat',
+        `${SERVER_URL}/api/chat`,
         {
           name: '',
           members: [user._id, otherUser._id],
