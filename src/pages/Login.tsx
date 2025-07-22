@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { SERVER_URL } from '../api/global';
 
 const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -15,7 +16,7 @@ const Login = () => {
   e.preventDefault();
   setLoading(true);
   try {
-    const res = await axios.post('http://localhost:5001/api/login', form);
+    const res = await axios.post(`${SERVER_URL}/api/login`, form);
     console.log('Server response:', res.data);
 
     const user = res.data?.data;

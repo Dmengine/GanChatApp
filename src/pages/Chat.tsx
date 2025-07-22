@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
+import { SERVER_URL } from '../api/global';
 
 const socket = io('http://localhost:5001');
 
@@ -71,7 +72,7 @@ const ChatPage: React.FC = () => {
   const fetchChats = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:5001/api/chat/${user?._id}`, {
+      const res = await axios.get(`${SERVER_URL}/api/chat/${user?._id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setChats(res.data);
@@ -123,17 +124,17 @@ const ChatPage: React.FC = () => {
       const emails = groupMembers.split(',').map((e) => e.trim());
       const memberRes = await Promise.all(
         emails.map((email) =>
-          axios.get(`http://localhost:5001/api/chat/user/${email}`, {
+          axios.get(`${SERVER_URL}/api/chat/user/${email}`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           })
         )
       );
 
       const members = memberRes.map((res) => res.data._id);
-      members.push(user!._id); // include current user
+      members.push(user!._id);
 
       const res = await axios.post(
-        'http://localhost:5001/api/chat',
+        `${SERVER_URL}/api/chat`,
         {
           name: groupName,
           members,
@@ -203,7 +204,7 @@ const ChatPage: React.FC = () => {
     const emails = addMembersInput.split(',').map((e) => e.trim());
     const memberRes = await Promise.all(
       emails.map((email) =>
-        axios.get(`http://localhost:5001/api/chat/user/${email}`, {
+        axios.get(`${SERVER_URL}/chat/user/${email}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         })
       )
@@ -212,14 +213,13 @@ const ChatPage: React.FC = () => {
     const newMembers = memberRes.map((res) => res.data._id);
 
     const res = await axios.put(
-      `http://localhost:5001/api/chat/${selectedChat._id}/add-members`,
+      `${SERVER_URL}/chat/${selectedChat._id}/add-members`,
       { newMembers },
       {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       }
     );
 
-    // Update selected chat with new members
     setSelectedChat(res.data);
     setAddMembersInput('');
     setShowAddMembers(false);

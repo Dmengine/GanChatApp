@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { SERVER_URL } from '../api/global';
 
 const Register = () => {
   const [form, setForm] = useState({ username: '', email: '', password: '' });
@@ -15,7 +16,7 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post('http://localhost:5001/api/register', form);
+      await axios.post(`${SERVER_URL}/api/register`, form);
       alert('Registration successful!');
       navigate('/login');
     } catch (err: any) {
