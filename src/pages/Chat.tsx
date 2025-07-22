@@ -3,7 +3,7 @@ import axios from 'axios';
 import io from 'socket.io-client';
 import { SERVER_URL } from '../api/global';
 
-const socket = io('http://localhost:5001');
+const socket = io('https://api-chatapp.onrender.com');
 
 interface User {
   _id: string;
@@ -155,7 +155,7 @@ const ChatPage: React.FC = () => {
 
   const fetchMessages = async (chatId: string) => {
     try {
-      const res = await axios.get(`http://localhost:5001/api/message/${chatId}`, {
+      const res = await axios.get(`${SERVER_URL}/api/message/${chatId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setMessages(res.data);
@@ -174,7 +174,7 @@ const ChatPage: React.FC = () => {
 
     try {
       const res = await axios.post(
-        `http://localhost:5001/api/message/${selectedChat._id}`,
+        `${SERVER_URL}/api/message/${selectedChat._id}`,
         {
           sender: user._id,
           content: newMessage,
@@ -204,7 +204,7 @@ const ChatPage: React.FC = () => {
     const emails = addMembersInput.split(',').map((e) => e.trim());
     const memberRes = await Promise.all(
       emails.map((email) =>
-        axios.get(`${SERVER_URL}/chat/user/${email}`, {
+        axios.get(`${SERVER_URL}/api/chat/user/${email}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         })
       )
@@ -213,7 +213,7 @@ const ChatPage: React.FC = () => {
     const newMembers = memberRes.map((res) => res.data._id);
 
     const res = await axios.put(
-      `${SERVER_URL}/chat/${selectedChat._id}/add-members`,
+      `${SERVER_URL}/api/chat/${selectedChat._id}/add-members`,
       { newMembers },
       {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
