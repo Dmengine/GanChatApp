@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { SERVER_URL } from '../api/global';
 import socket from '../socket';
+import { useNavigate } from 'react-router-dom';
 
 interface User {
   _id: string;
@@ -26,6 +27,7 @@ interface Message {
 }
 
 const ChatPage: React.FC = () => {
+  const navigate = useNavigate();
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
@@ -37,6 +39,13 @@ const ChatPage: React.FC = () => {
   const [groupMembers, setGroupMembers] = useState('');
   const [addMembersInput, setAddMembersInput] = useState('');
   const [showAddMembers, setShowAddMembers] = useState(false);
+
+  const handleLogout = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  localStorage.removeItem('user');
+  navigate('/login'); 
+};
 
 
   useEffect(() => {
@@ -235,6 +244,16 @@ const ChatPage: React.FC = () => {
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       {/* Left Panel */}
       <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r bg-white">
+      <div className="flex justify-between items-center p-4">
+        <h2 className="text-xl font-semibold">Chats</h2>
+        <button
+          onClick={handleLogout}
+          className="bg-red-500 text-white px-3 py-1 rounded-md text-sm"
+        >
+          Logout
+        </button>
+      </div>
+
         <div className="p-4">
           <h2 className="text-xl font-semibold text-center mb-4">Chats</h2>
 
