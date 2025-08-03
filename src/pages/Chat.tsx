@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import io from 'socket.io-client';
 import { SERVER_URL } from '../api/global';
-
-const socket = io('https://api-chatapp.onrender.com');
+import socket from '../socket';
 
 interface User {
   _id: string;
@@ -16,6 +14,7 @@ interface Chat {
   name: string;
   members: User[];
   isGroup: boolean;
+  admin: User;
 }
 
 interface Message {
@@ -120,6 +119,7 @@ const ChatPage: React.FC = () => {
 
   const createGroupChat = async () => {
     if (!groupName.trim() || !groupMembers.trim()) return;
+    // console.log(localStorage.getItem('token'))
     try {
       const emails = groupMembers.split(',').map((e) => e.trim());
       const memberRes = await Promise.all(
@@ -139,6 +139,7 @@ const ChatPage: React.FC = () => {
           name: groupName,
           members,
           isGroup: true,
+          admin: user!._id,
         },
         {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
@@ -158,13 +159,13 @@ const ChatPage: React.FC = () => {
       const res = await axios.get(`${SERVER_URL}/api/message/${chatId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
-      setMessages(res.data);
+      setMessages(res.data.messages);
     } catch (err) {
       console.error('Failed to fetch messages', err);
     }
   };
 
-  const handleSelectChat = (chat: Chat) => {
+  const handleSelectChat = async (chat: Chat) => {
     setSelectedChat(chat);
     fetchMessages(chat._id);
   };
@@ -231,9 +232,9 @@ const ChatPage: React.FC = () => {
 
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
       {/* Left Panel */}
-      <div className="w-full md:w-1/3 border-r bg-white">
+      <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r bg-white">
         <div className="p-4">
           <h2 className="text-xl font-semibold text-center mb-4">Chats</h2>
 
@@ -296,7 +297,7 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Right Panel */}
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-4 min-h-[60vh]">
         {selectedChat ? (
           <>
             <h3 className="text-lg font-bold mb-4">
@@ -304,7 +305,7 @@ const ChatPage: React.FC = () => {
                 ? selectedChat.name
                 : selectedChat.members.find((m) => m._id !== user?._id)?.email}
             </h3>
-            {selectedChat.isGroup && (
+            {selectedChat.isGroup && selectedChat.admin?._id === user?._id && (
               <div className="mb-4">
                 <button
                   onClick={() => setShowAddMembers((prev) => !prev)}
@@ -312,7 +313,7 @@ const ChatPage: React.FC = () => {
                 >
                   + Add Members
                 </button>
-                
+
                 {showAddMembers && (
                   <div className="mt-2">
                     <input

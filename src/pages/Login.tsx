@@ -17,7 +17,7 @@ const Login = () => {
   setLoading(true);
   try {
     const res = await axios.post(`${SERVER_URL}/api/login`, form);
-    console.log('Server response:', res.data);
+    // console.log('Server response:', res.data);
 
     const user = res.data?.data;
     const token = res.data?.token;
