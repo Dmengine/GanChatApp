@@ -257,24 +257,32 @@ const ChatPage: React.FC = () => {
         <div className="p-4">
           <h2 className="text-xl font-semibold text-center mb-4">Chats</h2>
 
-          <div className="flex mb-4">
-            <input
-              type="email"
-              placeholder="Enter email"
-              value={newChatEmail}
-              onChange={(e) => setNewChatEmail(e.target.value)}
-              className="p-2 border rounded-l w-full"
-            />
-            <button
-              onClick={createChat}
-              className="bg-blue-600 text-white px-4 rounded-r"
-              disabled={loading}
-            >
-              {loading ? '...' : 'Create'}
-            </button>
+          <div className="mb-6">
+            <p className="text-sm text-gray-600 mb-1">
+              💬 Start a 1-on-1 chat: Enter the email of another user to begin.
+            </p>
+            <div className="flex">
+              <input
+                type="email"
+                placeholder="Enter email"
+                value={newChatEmail}
+                onChange={(e) => setNewChatEmail(e.target.value)}
+                className="p-2 border rounded-l w-full"
+              />
+              <button
+                onClick={createChat}
+                className="bg-blue-600 text-white px-4 rounded-r"
+                disabled={loading}
+              >
+                {loading ? '...' : 'Create'}
+              </button>
+            </div>
           </div>
 
-          <div className="mb-4">
+          <div className="mb-6">
+            <p className="text-sm text-gray-600 mb-1">
+              👥 Create a group chat: Add a group name and invite multiple users by email (comma separated).
+            </p>
             <input
               type="text"
               placeholder="Group Name"
@@ -296,6 +304,7 @@ const ChatPage: React.FC = () => {
               Add Group
             </button>
           </div>
+
 
           <ul>
             {chats.map((chat) => (
